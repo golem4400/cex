@@ -1,9 +1,12 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const queryFilePath = path.join(__dirname, 'query.txt');
+const proxyFilePath = path.join(__dirname, 'proxy.txt');
 const queryData = fs.readFileSync(queryFilePath, 'utf8').trim().split('\n');
+const proxyData = fs.readFileSync(proxyFilePath, 'utf8').trim().split('\n');
 
 const animatedLoading = (durationInMilliseconds) => {
     const frames = ["|", "/", "-", "\\"];
@@ -22,7 +25,24 @@ const animatedLoading = (durationInMilliseconds) => {
     });
 };
 
-const processQuery = async (query_id) => {
+const checkProxyIP = async (proxy) => {
+    try {
+        const proxyAgent = new HttpsProxyAgent(proxy);
+        const response = await axios.get('https://api.ipify.org?format=json', {
+            httpsAgent: proxyAgent
+        });
+        if (response.status === 200) {
+            console.log('\nĐịa chỉ IP của proxy là:', response.data.ip);
+        } else {
+            console.error('Không thể kiểm tra IP của proxy. Status code:', response.status);
+        }
+    } catch (error) {
+        console.error('Error khi kiểm tra IP của proxy:', error);
+    }
+};
+
+const processQuery = async (query_id, proxy) => {
+    await checkProxyIP(proxy);
     query_id = query_id.replace(/[\r\n]+/g, '');
     const user_id_match = query_id.match(/user=%7B%22id%22%3A(\d+)/);
     if (!user_id_match) {
@@ -37,6 +57,8 @@ const processQuery = async (query_id) => {
         "platform": "android",
         "data": {}
     };
+
+    const agent = new HttpsProxyAgent(proxy);
 
     const config = {
         method: 'post',
@@ -56,7 +78,8 @@ const processQuery = async (query_id) => {
             'Sec-Fetch-Site': 'same-origin',
             'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
         },
-        data: payload
+        data: payload,
+        httpsAgent: agent
     };
 
     const claimTaps = async (availableTaps) => {
@@ -70,7 +93,8 @@ const processQuery = async (query_id) => {
             method: 'post',
             url: 'https://cexp.cex.io/api/claimTaps',
             headers: config.headers,
-            data: claimTapsPayload
+            data: claimTapsPayload,
+            httpsAgent: agent
         };
 
         try {
@@ -97,7 +121,8 @@ const processQuery = async (query_id) => {
             method: 'post',
             url: 'https://cexp.cex.io/api/claimFarm',
             headers: config.headers,
-            data: claimFarmPayload
+            data: claimFarmPayload,
+            httpsAgent: agent
         };
 
         try {
@@ -119,7 +144,8 @@ const processQuery = async (query_id) => {
             method: 'post',
             url: 'https://cexp.cex.io/api/startFarm',
             headers: config.headers,
-            data: startFarmPayload
+            data: startFarmPayload,
+            httpsAgent: agent
         };
 
         try {
@@ -162,7 +188,7 @@ const processQuery = async (query_id) => {
 const run = async () => {
     while (true) {
         for (let i = 0; i < queryData.length; i++) {
-            await processQuery(queryData[i]);
+            await processQuery(queryData[i], proxyData[i]);
         }
         await animatedLoading(4 * 60 * 60 * 1000 + 10 * 60 * 1000);  
     }
